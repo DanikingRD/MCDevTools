@@ -1,3 +1,4 @@
+use app::App;
 use crossterm::{
     event::{self, Event, KeyCode},
     execute,
@@ -8,17 +9,20 @@ use std::{
     time::{Duration, Instant},
 };
 use std::{io::Stdout, vec};
-use terminal_state::TerminalState;
 use tui::{
     backend::{Backend, CrosstermBackend},
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
+    layout::{Constraint, Layout},
+    style::{Color, Style},
     text::{Span, Spans, Text},
-    widgets::{Block, Borders, List, ListItem, Paragraph},
+    widgets::{List, ListItem, Paragraph},
     Frame, Terminal,
 };
 use unicode_width::UnicodeWidthStr;
-use util::{AvailableOption, EditModeType, ItemOption, MenuType};
+use util::{
+    block_with_text, bold, create_menu, italic, menu_spans, move_menu_spans, stop_editing_spans,
+    AvailableOption, EditModeType, MenuType,
+};
+mod app;
 mod terminal_state;
 mod util;
 fn main() -> Result<(), io::Error> {
@@ -118,6 +122,7 @@ fn render(
                                 None => (),
                             }
                         }
+                        KeyCode::Char('m') => app.set_mode(EditModeType::ItemOptions),
                         _ => (),
                     },
                     _ => (),
@@ -146,72 +151,61 @@ fn render_block_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
 
 fn render_options_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
     // Define constrains for widgets
+    let constrains = [
+        Constraint::Length(2),
+        Constraint::Length(3),
+        Constraint::Percentage(80),
+    ];
+    // Define area
     let area = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints(
-            [
-                Constraint::Length(1),
-                Constraint::Length(1),
-                Constraint::Length(3),
-                Constraint::Percentage(80),
-            ]
-            .as_ref(),
-        )
+        .constraints(constrains.as_ref())
         .split(frame.size());
-    // Controls desc
-    let input_msg = match app.mode {
-        EditModeType::None => vec![
-            Span::raw("Press "),
-            Span::styled("e ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw("to edit your namespace, "),
-            Span::styled("m ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw("to select an option from the menu"),
-        ],
-        _ => vec![
-            Span::raw("Press "),
-            Span::styled("Esc", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(" to stop editing."),
-        ],
+    // Bold style
+    let bold_style = bold();
+    // Create text lines
+    let lines: Vec<Spans> = match &app.mode {
+        EditModeType::None => {
+            // First line
+            let first_line = vec![
+                Span::raw("Press "),
+                Span::styled("e ", bold_style),
+                Span::raw("to edit your namespace."),
+            ];
+            // Map to Spans which holds a vector of span
+            vec![Spans::from(first_line), menu_spans()]
+        }
+        EditModeType::MainMenuOptions => {
+            let line = vec![
+                Span::raw("Press arrow "),
+                Span::styled("up ", bold_style),
+                Span::raw("or "),
+                Span::styled("down ", bold_style),
+                Span::raw("to select an option from the menu"),
+            ];
+            vec![Spans::from(line)]
+        }
+        _ => Vec::with_capacity(0),
     };
-    // Create helper message
-    let input_text = Text::from(Spans::from(input_msg));
-    let help_message = Paragraph::new(input_text);
-    // Render message
-    frame.render_widget(help_message, area[1]);
-    if app.mode == EditModeType::MainMenuOptions {
-        // Append another message for main menu
-        let msg = vec![
-            Span::raw("Press arrow "),
-            Span::styled("up ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw("or "),
-            Span::styled("down ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw("to select an option from the menu"),
-        ];
-        let paragraph = Paragraph::new(Text::from(Spans::from(msg)));
-        frame.render_widget(paragraph, area[0]);
-    }
+    // Convert Vect<Spans> to Text
+    let text = Text::from(lines);
+    // Create text widget
+    let paragraph = Paragraph::new(text);
+    // Render text
+    frame.render_widget(paragraph, area[0]);
     // Create input text field
     let mut output = String::from(app.namespace.as_str());
     output.insert_str(0, " > ");
-    let input = Paragraph::new(output)
-        .style(match app.mode {
-            EditModeType::Namespace => Style::default().fg(Color::Rgb(255, 153, 0)),
-            _ => Style::default(),
-        })
-        .block(Block::default().borders(Borders::ALL).title("Namespace"));
-    frame.render_widget(input, area[2]);
-    match app.mode {
-        EditModeType::Namespace => {
-            // Make the cursor visible and ask tui-rs to put it at the specified coordinates after rendering
-            frame.set_cursor(
-                // Put cursor past the end of the input text
-                area[2].x + app.namespace.width() as u16 + 4, // symbol takes 3 spaces + 1 offset
-                // Move one line down, from the border to the input line
-                area[2].y + 1,
-            )
-        }
-        _ => (),
-    };
+    let text_widget = block_with_text(&app.mode, Paragraph::new(output), "Namespace");
+    frame.render_widget(text_widget, area[1]);
+    if app.mode == EditModeType::Namespace {
+        // Make the cursor visible and ask tui-rs to put it at the specified coordinates after rendering
+        frame.set_cursor(
+            // Put cursor past the end of the input text
+            area[1].x + app.namespace.width() as u16 + 4, // symbol takes 3 spaces + 1 offset
+            // Move one line down, from the border to the input line
+            area[1].y + 1,
+        )
+    }
     // Render menu
     let items: Vec<ListItem> = app
         .state
@@ -219,39 +213,38 @@ fn render_options_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
         .elements()
         .iter()
         .map(|entry| {
-            let mut lines = vec![Spans::from(entry.get_option())];
-            lines.push(Spans::from(Span::styled(
-                entry.get_desc(),
-                Style::default().add_modifier(Modifier::ITALIC),
-            )));
+            let lines = vec![
+                Spans::from(entry.get_option()),
+                Spans::from(Span::styled(entry.get_desc(), italic())),
+            ];
             return ListItem::new(lines).style(Style::default().fg(Color::White));
         })
         .collect();
 
-    let mut list = List::new(items).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .title("Select an option"),
+    let menu_widget = create_menu(
+        "Select an option",
+        items,
+        app.mode == EditModeType::MainMenuOptions,
     );
-    if app.mode == EditModeType::MainMenuOptions {
-        list = list
-            .highlight_style(
-                Style::default()
-                    .fg(Color::Rgb(255, 153, 0))
-                    .add_modifier(Modifier::BOLD),
-            )
-            .highlight_symbol(" > ");
-    }
-
-    frame.render_stateful_widget(list, area[3], &mut app.state.options().current_state())
+    frame.render_stateful_widget(
+        menu_widget,
+        area[2],
+        &mut app.state.options().current_state(),
+    )
 }
 
 fn render_item_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
     let area = Layout::default()
-        .direction(tui::layout::Direction::Horizontal)
-        .constraints([Constraint::Percentage(100)].as_ref())
+        .constraints([Constraint::Length(2), Constraint::Percentage(80)].as_ref())
         .split(frame.size());
 
+    // Create text lines
+    let lines: Vec<Spans> = match app.mode {
+        EditModeType::None => vec![menu_spans()],
+        EditModeType::ItemOptions => vec![stop_editing_spans(), move_menu_spans()],
+        _ => Vec::with_capacity(0),
+    };
+    frame.render_widget(Paragraph::new(lines), area[0]);
     let items: Vec<ListItem> = app
         .state
         .item_options()
@@ -268,48 +261,6 @@ fn render_item_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
         })
         .collect();
 
-    let list = List::new(items)
-        .block(Block::default().borders(Borders::ALL).title("Item Options"))
-        .highlight_style(
-            Style::default()
-                .fg(Color::Rgb(255, 153, 0))
-                .add_modifier(Modifier::BOLD),
-        )
-        .highlight_symbol(" > ");
-    frame.render_stateful_widget(list, area[0], app.state.item_options().current_state());
-}
-
-/// This struct holds the current state of the app.
-struct App<'a> {
-    namespace: String,
-    mode: EditModeType,
-    state: TerminalState<'a>,
-    menu: MenuType,
-}
-
-impl<'a> App<'a> {
-    pub fn new() -> Self {
-        Self {
-            namespace: String::from("modid"),
-            mode: EditModeType::None,
-            state: TerminalState::new(
-                vec![
-                    AvailableOption::new("Create Item\n\n", "Generates JSON files for an item."),
-                    AvailableOption::new("Create Block", "Generates JSON files for a block."),
-                ],
-                vec![ItemOption::new("Handheld")],
-            ),
-            menu: MenuType::MainMenu,
-        }
-    }
-    pub fn navigate(&mut self, menu: MenuType) {
-        self.menu = menu;
-    }
-    pub fn current_menu(&self) -> &MenuType {
-        &self.menu
-    }
-    pub fn set_mode(&mut self, mode: EditModeType) {
-        self.mode = mode;
-    }
-    pub fn tick(&self) {}
+    let list = create_menu("Item Options", items, app.mode == EditModeType::ItemOptions);
+    frame.render_stateful_widget(list, area[1], app.state.item_options().current_state());
 }

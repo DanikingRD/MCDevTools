@@ -7,7 +7,6 @@ pub struct TerminalState<'a> {
     options_state: StatefulList<AvailableOption<'a>>,
     block_options: StatefulList<&'a str>,
     item_options: StatefulList<ItemOption<'a>>,
-    editing: bool,
 }
 impl<'a> TerminalState<'a> {
     pub fn new(options: Vec<AvailableOption<'a>>, item_options: Vec<ItemOption<'a>>) -> Self {
@@ -15,12 +14,9 @@ impl<'a> TerminalState<'a> {
             options_state: StatefulList::of(options),
             item_options: StatefulList::of(item_options),
             block_options: StatefulList::of(vec![]),
-            editing: false,
         }
     }
-    pub fn is_editing(&self) -> bool {
-        self.editing
-    }
+
     pub fn options(&mut self) -> &mut StatefulList<AvailableOption<'a>> {
         &mut self.options_state
     }
