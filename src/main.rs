@@ -1,41 +1,67 @@
 use crossterm::{
-    event::EnableMouseCapture,
+    event::{EnableMouseCapture, DisableMouseCapture},
     execute,
-    terminal::{enable_raw_mode, EnterAlternateScreen},
+    terminal::{enable_raw_mode, EnterAlternateScreen, disable_raw_mode, LeaveAlternateScreen},
 };
 use std::io;
 use std::vec;
 use tui::{
-    backend::CrosstermBackend, layout::Layout, style::Style, text::Spans, widgets::ListItem, Frame,
-    Terminal,
+    backend::{CrosstermBackend, Backend}, 
+    layout::{Layout, Constraint}, style::{Style, Color, Modifier},
+    text::Spans, widgets::{ListItem, List, Borders, Block, ListState}, Frame,Terminal,
 };
 mod test;
 fn main() -> Result<(), io::Error> {
-    enable_raw_mode();
+    enable_raw_mode()?;
     let mut stdout = io::stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+
     let backend = CrosstermBackend::new(stdout);
+
     let mut terminal = Terminal::new(backend)?;
-    let app = App::new();
+    let mut app = App::new();
+    run(&mut app, &mut terminal)?;
+    disable_raw_mode()?;
+    execute!(
+        terminal.backend_mut(),
+        LeaveAlternateScreen,
+        DisableMouseCapture
+    )?;
+    Ok(())
+    
+}
+fn run<B: Backend>(app: &mut App, terminal: &mut Terminal<B>) -> Result<(), io::Error> {
     loop {
         terminal.draw(|frame| {
-            println!("Drawing()");
+            render_app(app, frame)
         })?;
     }
 }
-fn draw_app(app: &mut App) {
-    // let layout = Layout::default();
-    // app.options
-    //     .iter()
-    //     .map(|entry| {
-    //         let mut lines = vec![Spans::from(entry.as_str())];
-    //         ListItem::new(lines).style(Style::default());
-    //     })
+fn render_app<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
+    let area = Layout::default()
+    .direction(tui::layout::Direction::Horizontal)
+    .constraints([Constraint::Percentage(100)].as_ref())
+    .split(frame.size());
 
-    //     .collect();
+    let items: Vec<ListItem> = app.options
+    
+        .iter()
+        .map(|entry| {
+            let mut lines = vec![Spans::from(entry.as_str())];
+            ListItem::new(lines).style(Style::default())
+        }).collect();
+    let list = List::new(items)
+    .block(Block::default().borders(Borders::ALL).title("List"))  .highlight_style(
+        Style::default()
+            .bg(Color::LightGreen)
+            .add_modifier(Modifier::BOLD),
+    ).highlight_symbol(">> ");
+    frame.render_stateful_widget(list, area[0], &mut app.state);
 }
 
 struct App {
     options: Vec<String>,
+    state: ListState,
 }
 impl App {
     pub fn new() -> Self {
@@ -45,6 +71,7 @@ impl App {
                 "Item2".to_string(),
                 "Item3".to_string(),
             ],
+            state: ListState::default(),
         }
     }
 }
