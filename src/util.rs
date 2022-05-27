@@ -1,6 +1,14 @@
 use tui::widgets::ListState;
 
 #[derive(PartialEq, Eq)]
+pub enum EditModeType {
+    Namespace,
+    MainMenuOptions,
+    ItemOptions,
+    None,
+}
+
+#[derive(PartialEq, Eq)]
 pub enum MenuType {
     MainMenu,
     ItemMenu,
@@ -22,11 +30,17 @@ impl<T> StatefulList<T> {
     pub fn selected(&self) -> Option<usize> {
         self.state.selected()
     }
+    pub fn select_first(&mut self) {
+        self.state.select(Some(0));
+    }
     pub fn current_state(&mut self) -> &mut ListState {
         &mut self.state
     }
     pub fn elements(&self) -> &Vec<T> {
         &self.list
+    }
+    pub fn elements_mut(&mut self) -> &mut Vec<T> {
+        &mut self.list
     }
     pub fn next(&mut self) {
         let i = match self.state.selected() {
@@ -71,5 +85,27 @@ impl<'a> AvailableOption<'a> {
     }
     pub fn get_desc(&self) -> &'a str {
         self.desc
+    }
+}
+
+pub struct ItemOption<'a> {
+    option: &'a str,
+    active: bool,
+}
+impl<'a> ItemOption<'a> {
+    pub fn new(option: &'a str) -> Self {
+        Self {
+            option,
+            active: false,
+        }
+    }
+    pub fn get_option(&self) -> &'a str {
+        self.option
+    }
+    pub fn is_active(&self) -> bool {
+        self.active
+    }
+    pub fn toggle(&mut self) {
+        self.active = !self.active
     }
 }
