@@ -1,9 +1,9 @@
 use crossterm::{
-    event::{EnableMouseCapture, DisableMouseCapture},
+    event::{EnableMouseCapture, DisableMouseCapture, self, Event},
     execute,
     terminal::{enable_raw_mode, EnterAlternateScreen, disable_raw_mode, LeaveAlternateScreen},
 };
-use std::io;
+use std::{io, time::{Duration, Instant}};
 use std::vec;
 use tui::{
     backend::{CrosstermBackend, Backend}, 
@@ -14,7 +14,6 @@ mod test;
 fn main() -> Result<(), io::Error> {
     enable_raw_mode()?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
 
     let backend = CrosstermBackend::new(stdout);
 
@@ -22,20 +21,31 @@ fn main() -> Result<(), io::Error> {
     let mut app = App::new();
     run(&mut app, &mut terminal)?;
     disable_raw_mode()?;
-    execute!(
-        terminal.backend_mut(),
-        LeaveAlternateScreen,
-        DisableMouseCapture
-    )?;
+
     Ok(())
     
 }
 fn run<B: Backend>(app: &mut App, terminal: &mut Terminal<B>) -> Result<(), io::Error> {
+    let tick_rate = Duration::from_millis(250);
+    let mut last_tick = Instant::now();
+
     loop {
-        terminal.draw(|frame| {
-            render_app(app, frame)
-        })?;
+        terminal.draw(|frame|render_app(app, frame))?;
+        let timeout = tick_rate
+        .checked_sub(last_tick.elapsed())
+        .unwrap_or_else(|| Duration::from_secs(0));
+        handle_events(timeout)?;
     }
+}
+fn handle_events(timeout: Duration) -> Result<(), io::Error> {
+    let event_available = crossterm::event::poll(timeout)?;
+    if event_available {
+        // If this is a keyboard event
+        if let Event::Key(key) = event::read()? {
+            println!("Keyboard event");
+        }
+    }
+    Ok(())
 }
 fn render_app<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
     let area = Layout::default()
@@ -44,10 +54,9 @@ fn render_app<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
     .split(frame.size());
 
     let items: Vec<ListItem> = app.options
-    
         .iter()
         .map(|entry| {
-            let mut lines = vec![Spans::from(entry.as_str())];
+            let lines = vec![Spans::from(entry.as_str())];
             ListItem::new(lines).style(Style::default())
         }).collect();
     let list = List::new(items)
