@@ -251,13 +251,21 @@ fn render_item_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
         .elements()
         .iter()
         .map(|element| {
-            let square;
-            if element.is_active() {
-                square = "[x]";
-            } else {
-                square = "[]";
-            }
-            ListItem::new(Text::from(element.get_option().to_owned() + " " + square))
+            // let square;
+            // if element.is_active() {
+            //     square = "[x]";
+            // } else {
+            //     square = format!("{} {}", "[ ]", element.get_desc()).as_str()
+            // }
+            let line = format!(
+                "{} [{}] {}",
+                element.get_option(),
+                if element.is_active() { 'x' } else { ' ' },
+                element.get_desc()
+            );
+            ListItem::new(Text::from(
+                element.get_option().to_owned() + " " + line.as_str(),
+            ))
         })
         .collect();
 

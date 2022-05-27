@@ -155,17 +155,22 @@ impl<'a> AvailableOption<'a> {
 
 pub struct ItemOption<'a> {
     option: &'a str,
+    desc: &'a str,
     active: bool,
 }
 impl<'a> ItemOption<'a> {
-    pub fn new(option: &'a str) -> Self {
+    pub fn new(option: &'a str, desc: &'a str) -> Self {
         Self {
             option,
+            desc,
             active: false,
         }
     }
     pub fn get_option(&self) -> &'a str {
         self.option
+    }
+    pub fn get_desc(&self) -> &'a str {
+        self.desc
     }
     pub fn is_active(&self) -> bool {
         self.active
