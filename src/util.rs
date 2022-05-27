@@ -1,19 +1,23 @@
 use tui::widgets::ListState;
 
 pub struct StatefulList<T> {
-    pub state: ListState,
+    pub current: ListState,
     pub list: Vec<T>,
 }
 
 impl <T> StatefulList<T> {
     pub fn of(list: Vec<T>) -> Self {
         Self { 
-            state: ListState::default(),
+            current: ListState::default(),
             list: list,
         }
     }
+
+    pub fn selected(&self) -> Option<usize> {
+        self.current.selected()
+    }
     pub fn next(&mut self) {
-        let i = match self.state.selected() {
+        let i = match self.current.selected() {
             Some(i) => {
                 if i >= self.list.len() - 1 {
                     0
@@ -23,10 +27,10 @@ impl <T> StatefulList<T> {
             }
             None => 0,
         };
-        self.state.select(Some(i));
+        self.current.select(Some(i));
     }
     pub fn previous(&mut self) {
-        let i = match self.state.selected() {
+        let i = match self.current.selected() {
             Some(i) => {
                 if i == 0 {
                     self.list.len() - 1
@@ -36,6 +40,6 @@ impl <T> StatefulList<T> {
             }
             None => 0,
         };
-        self.state.select(Some(i));
+        self.current.select(Some(i));
     }
 } 
