@@ -1,19 +1,20 @@
 use crossterm::{
-    event::{EnableMouseCapture, DisableMouseCapture, self, Event},
-    execute,
-    terminal::{enable_raw_mode, EnterAlternateScreen, disable_raw_mode, LeaveAlternateScreen},
+    event::{self, Event, KeyCode},
+    terminal::{enable_raw_mode, disable_raw_mode},
 };
+use util::StatefulList;
 use std::{io, time::{Duration, Instant}};
 use std::vec;
 use tui::{
     backend::{CrosstermBackend, Backend}, 
     layout::{Layout, Constraint}, style::{Style, Color, Modifier},
-    text::Spans, widgets::{ListItem, List, Borders, Block, ListState}, Frame,Terminal,
+    text::{Spans, Span}, widgets::{ListItem, List, Borders, Block}, Frame,Terminal,
 };
+mod util;
 mod test;
 fn main() -> Result<(), io::Error> {
     enable_raw_mode()?;
-    let mut stdout = io::stdout();
+    let  stdout = io::stdout();
 
     let backend = CrosstermBackend::new(stdout);
 
@@ -28,21 +29,28 @@ fn main() -> Result<(), io::Error> {
 fn run<B: Backend>(app: &mut App, terminal: &mut Terminal<B>) -> Result<(), io::Error> {
     let tick_rate = Duration::from_millis(250);
     let mut last_tick = Instant::now();
-
     loop {
         terminal.draw(|frame|render_app(app, frame))?;
         let timeout = tick_rate
         .checked_sub(last_tick.elapsed())
         .unwrap_or_else(|| Duration::from_secs(0));
-        handle_events(timeout)?;
+        handle_events(app, timeout)?;
+        if last_tick.elapsed() >= tick_rate {
+            app.tick();
+            last_tick = Instant::now();
+        }
     }
 }
-fn handle_events(timeout: Duration) -> Result<(), io::Error> {
+fn handle_events(app: &mut App,timeout: Duration) -> Result<(), io::Error> {
     let event_available = crossterm::event::poll(timeout)?;
     if event_available {
         // If this is a keyboard event
         if let Event::Key(key) = event::read()? {
-            println!("Keyboard event");
+            match key.code {
+                KeyCode::Down => app.data.next(),
+                KeyCode::Up => app.data.previous(),
+                _ => {}
+            }
         }
     }
     Ok(())
@@ -53,34 +61,41 @@ fn render_app<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
     .constraints([Constraint::Percentage(100)].as_ref())
     .split(frame.size());
 
-    let items: Vec<ListItem> = app.options
+    let items: Vec<ListItem> = app.data
+    .list
         .iter()
         .map(|entry| {
-            let lines = vec![Spans::from(entry.as_str())];
-            ListItem::new(lines).style(Style::default())
-        }).collect();
+            let mut lines = vec![Spans::from(entry.as_ref())];
+            lines.push(Spans::from(Span::styled(
+                "Lorem ipsum dolor sit amet, consectetur adipiscing elit.",
+                Style::default().add_modifier(Modifier::ITALIC))));
+                return ListItem::new(lines).style(Style::default().fg(Color::White));
+            }).collect();
     let list = List::new(items)
     .block(Block::default().borders(Borders::ALL).title("List"))  .highlight_style(
         Style::default()
             .bg(Color::LightGreen)
             .add_modifier(Modifier::BOLD),
     ).highlight_symbol(">> ");
-    frame.render_stateful_widget(list, area[0], &mut app.state);
+    frame.render_stateful_widget(list, area[0], &mut app.data.state);
 }
 
-struct App {
-    options: Vec<String>,
-    state: ListState,
+/// This struct holds the current state of the app.
+struct App<'a> {
+    data: StatefulList<&'a str>,
 }
-impl App {
+impl<'a> App<'a> {
     pub fn new() -> Self {
+        
         Self {
-            options: vec![
-                "Item1".to_string(),
-                "Item2".to_string(),
-                "Item3".to_string(),
-            ],
-            state: ListState::default(),
+            data: StatefulList::of(vec![
+                "Item1",
+                "Item2",
+                "Item3",
+            ]),
         }
+    }
+    pub fn tick(&self) {
+
     }
 }
