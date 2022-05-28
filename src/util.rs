@@ -18,16 +18,18 @@ pub fn create_menu<'a>(title: &'a str, entries: Vec<ListItem<'a>>, active: bool)
     return menu;
 }
 
-pub fn block_with_text<'a>(
+pub fn text_field<'a>(
     current_mode: &EditModeType,
+    active_mode:  EditModeType,
     raw_paragraph: Paragraph<'a>,
     title: &'a str,
 ) -> Paragraph<'a> {
+    let mut style = Style::default();
+    if *current_mode == active_mode {
+        style = style.fg(Color::Rgb(255, 153, 0));
+    }
     raw_paragraph
-        .style(match current_mode {
-            EditModeType::Namespace => Style::default().fg(Color::Rgb(255, 153, 0)),
-            _ => Style::default(),
-        })
+        .style(style)
         .block(Block::default().borders(Borders::ALL).title(title))
 }
 
@@ -56,21 +58,21 @@ pub fn menu_spans<'a>() -> Spans<'a> {
     ];
     Spans::from(line)
 }
-/// Reusable stop editing span vector
 pub fn stop_editing_spans<'a>() -> Spans<'a> {
     let line = vec![
         Span::raw("Press "),
         Span::styled("Esc", bold()),
-        Span::raw(" to stop editing."),
+        Span::raw(" to switch to normal mode."),
     ];
     Spans::from(line)
 }
 #[derive(PartialEq, Eq)]
 pub enum EditModeType {
     Namespace,
-    MainMenuOptions,
-    ItemOptions,
+    MainMenu,
+    ItemMenu,
     None,
+    ItemPath,
 }
 
 #[derive(PartialEq, Eq)]
@@ -165,6 +167,9 @@ impl<'a> ItemOption<'a> {
             desc,
             active: false,
         }
+    }
+    pub fn active(option: &'a str, desc: &'a str) -> Self {
+        Self { option:  option, desc: desc, active: true,  }
     }
     pub fn get_option(&self) -> &'a str {
         self.option

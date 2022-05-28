@@ -19,8 +19,8 @@ use tui::{
 };
 use unicode_width::UnicodeWidthStr;
 use util::{
-    block_with_text, bold, create_menu, italic, menu_spans, move_menu_spans, stop_editing_spans,
-    AvailableOption, EditModeType, MenuType,
+    text_field, bold, create_menu, italic, menu_spans, move_menu_spans,
+    AvailableOption, EditModeType, MenuType, stop_editing_spans,
 };
 mod app;
 mod terminal_state;
@@ -62,6 +62,7 @@ fn render(
                 if KeyCode::Esc == key.code {
                     app.set_mode(EditModeType::None);
                 }
+        
                 match app.current_menu() {
                     MenuType::MainMenu => {
                         // Only if we are on normal mode we can switch
@@ -72,13 +73,13 @@ fn render(
                                         app.set_mode(EditModeType::Namespace);
                                     }
                                     KeyCode::Char('m') => {
-                                        app.set_mode(EditModeType::MainMenuOptions);
+                                        app.set_mode(EditModeType::MainMenu);
                                         app.state.options().select_first()
                                     }
                                     _ => (),
                                 };
                             }
-                            EditModeType::MainMenuOptions => match key.code {
+                            EditModeType::MainMenu => match key.code {
                                 KeyCode::Down => app.state.options().next(),
                                 KeyCode::Up => app.state.options().previous(),
                                 KeyCode::Enter => {
@@ -107,22 +108,36 @@ fn render(
                                 }
                                 _ => (),
                             },
+                            EditModeType::ItemPath => match key.code {
+                                KeyCode::Char(c) => app.path.push(c),
+                                KeyCode::Backspace => {
+                                    app.path.pop();
+                                }
+                                _ => (),
+                            }
                             _ => (),
                         }
                     }
                     MenuType::ItemMenu => match key.code {
                         KeyCode::Char(' ') => {
-                            let options = app.state.item_options();
-                            let index = options.selected();
-                            match index {
-                                Some(pos) => match options.elements_mut().get_mut(pos) {
-                                    Some(item) => item.toggle(),
+                            if app.mode == EditModeType::ItemMenu {
+                                let options = app.state.item_options();
+                                let index = options.selected();
+                                match index {
+                                    Some(pos) => match options.elements_mut().get_mut(pos) {
+                                        Some(item) => item.toggle(),
+                                        None => (),
+                                    },
                                     None => (),
-                                },
-                                None => (),
+                                }
                             }
                         }
-                        KeyCode::Char('m') => app.set_mode(EditModeType::ItemOptions),
+                        KeyCode::Char('e') => {
+                            app.set_mode(EditModeType::ItemPath)
+                        }
+                        KeyCode::Down => app.state.item_options().next(),
+                        KeyCode::Up => app.state.item_options().previous(),
+                        KeyCode::Char('m') => app.set_mode(EditModeType::ItemMenu),
                         _ => (),
                     },
                     _ => (),
@@ -174,15 +189,12 @@ fn render_options_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
             // Map to Spans which holds a vector of span
             vec![Spans::from(first_line), menu_spans()]
         }
-        EditModeType::MainMenuOptions => {
-            let line = vec![
-                Span::raw("Press arrow "),
-                Span::styled("up ", bold_style),
-                Span::raw("or "),
-                Span::styled("down ", bold_style),
-                Span::raw("to select an option from the menu"),
-            ];
-            vec![Spans::from(line)]
+        EditModeType::Namespace => {
+            vec![stop_editing_spans(),]
+        }
+        EditModeType::MainMenu => {
+            
+            vec![move_menu_spans(), stop_editing_spans()]
         }
         _ => Vec::with_capacity(0),
     };
@@ -195,7 +207,7 @@ fn render_options_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
     // Create input text field
     let mut output = String::from(app.namespace.as_str());
     output.insert_str(0, " > ");
-    let text_widget = block_with_text(&app.mode, Paragraph::new(output), "Namespace");
+    let text_widget = text_field(&app.mode, EditModeType::Namespace,Paragraph::new(output), "Namespace");
     frame.render_widget(text_widget, area[1]);
     if app.mode == EditModeType::Namespace {
         // Make the cursor visible and ask tui-rs to put it at the specified coordinates after rendering
@@ -224,7 +236,7 @@ fn render_options_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
     let menu_widget = create_menu(
         "Select an option",
         items,
-        app.mode == EditModeType::MainMenuOptions,
+        app.mode == EditModeType::MainMenu,
     );
     frame.render_stateful_widget(
         menu_widget,
@@ -235,13 +247,23 @@ fn render_options_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
 
 fn render_item_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
     let area = Layout::default()
-        .constraints([Constraint::Length(2), Constraint::Percentage(80)].as_ref())
+        .constraints([Constraint::Length(2), Constraint::Length(3), Constraint::Percentage(80)].as_ref())
         .split(frame.size());
 
     // Create text lines
     let lines: Vec<Spans> = match app.mode {
-        EditModeType::None => vec![menu_spans()],
-        EditModeType::ItemOptions => vec![stop_editing_spans(), move_menu_spans()],
+        EditModeType::None => vec![
+            Spans::from(vec![Span::raw("Press "),
+            Span::styled("e ", bold()),
+            Span::raw("to edit the item name."),]),
+            menu_spans()],
+        EditModeType::ItemMenu => vec![
+            move_menu_spans(),
+            stop_editing_spans()
+        ],
+        EditModeType::ItemPath => vec![
+            stop_editing_spans()
+        ],
         _ => Vec::with_capacity(0),
     };
     frame.render_widget(Paragraph::new(lines), area[0]);
@@ -251,24 +273,32 @@ fn render_item_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
         .elements()
         .iter()
         .map(|element| {
-            // let square;
-            // if element.is_active() {
-            //     square = "[x]";
-            // } else {
-            //     square = format!("{} {}", "[ ]", element.get_desc()).as_str()
-            // }
+
             let line = format!(
-                "{} [{}] {}",
-                element.get_option(),
+                "[{}] {}:  {}",
                 if element.is_active() { 'x' } else { ' ' },
+                element.get_option(),
                 element.get_desc()
             );
-            ListItem::new(Text::from(
-                element.get_option().to_owned() + " " + line.as_str(),
+            ListItem::new(
+                Text::from(
+                line
             ))
-        })
-        .collect();
+        }).collect();
+    let mut name = String::from(app.path.as_str());
+    name.insert_str(0, " > ");
+    let text_field = text_field(&app.mode, EditModeType::ItemPath, Paragraph::new(name), "Item Name");
+    frame.render_widget(text_field, area[1]);
 
-    let list = create_menu("Item Options", items, app.mode == EditModeType::ItemOptions);
-    frame.render_stateful_widget(list, area[1], app.state.item_options().current_state());
+    if app.mode == EditModeType::ItemPath {
+        // Make the cursor visible and ask tui-rs to put it at the specified coordinates after rendering
+        frame.set_cursor(
+            // Put cursor past the end of the input text
+            area[1].x + app.path.width() as u16 + 4, // symbol takes 3 spaces + 1 offset
+            // Move one line down, from the border to the input line
+            area[1].y + 1,
+        )
+    }
+    let list = create_menu("Item Options", items, app.mode == EditModeType::ItemMenu);
+    frame.render_stateful_widget(list, area[2], app.state.item_options().current_state());
 }
