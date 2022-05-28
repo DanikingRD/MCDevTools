@@ -66,7 +66,7 @@ pub fn stop_editing_spans<'a>() -> Spans<'a> {
     ];
     Spans::from(line)
 }
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, Debug)]
 pub enum EditModeType {
     Namespace,
     MainMenu,
@@ -80,6 +80,31 @@ pub enum MenuType {
     MainMenu,
     ItemMenu,
     BlockMenu,
+}
+/// The value represents how far the menu is
+/// From the first screen.
+impl MenuType {
+    pub fn value(&self) -> i32 {
+        match *self {
+            Self::MainMenu => 0,
+            Self::ItemMenu => 1,
+            Self::BlockMenu => 1
+        }
+    }
+    pub fn can_navigate_back(&self) -> bool {
+        let i = self.value();
+        i > 0
+    }
+    pub fn get_previous_menu(&self) -> Self {
+        let i = self.value();
+        if i == 1 {
+            Self::MainMenu
+        } else {
+            // TODO: CHECK OTHER MENUS
+            Self::MainMenu
+        }
+        
+    }
 }
 pub struct StatefulList<T> {
     state: ListState,

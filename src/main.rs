@@ -58,14 +58,20 @@ fn render(
         if event_available {
             // If this is a keyboard event
             if let Event::Key(key) = event::read()? {
-                // Update modes
+                // Global event handlers
                 if KeyCode::Esc == key.code {
                     app.set_mode(EditModeType::None);
                 }
-        
+                if app.mode == EditModeType::None && app.current_menu().can_navigate_back() {
+                    if key.code == KeyCode::Char('q') {
+                        app.navigate(app.menu.get_previous_menu());
+                    }
+                }
+                // Screen-specific event handlers
                 match app.current_menu() {
                     MenuType::MainMenu => {
                         // Only if we are on normal mode we can switch
+                        
                         match app.mode {
                             EditModeType::None => {
                                 match key.code {
@@ -108,39 +114,54 @@ fn render(
                                 }
                                 _ => (),
                             },
-                            EditModeType::ItemPath => match key.code {
-                                KeyCode::Char(c) => app.path.push(c),
-                                KeyCode::Backspace => {
-                                    app.path.pop();
-                                }
-                                _ => (),
-                            }
                             _ => (),
                         }
                     }
-                    MenuType::ItemMenu => match key.code {
-                        KeyCode::Char(' ') => {
-                            if app.mode == EditModeType::ItemMenu {
-                                let options = app.state.item_options();
-                                let index = options.selected();
-                                match index {
-                                    Some(pos) => match options.elements_mut().get_mut(pos) {
-                                        Some(item) => item.toggle(),
-                                        None => (),
-                                    },
-                                    None => (),
+                    MenuType::ItemMenu => {
+                        match app.mode {
+                            EditModeType::ItemMenu => {
+                                match key.code {
+                                    KeyCode::Char(' ') => {
+                                        let options = app.state.item_options();
+                                        let index = options.selected();
+                                        match index {
+                                            Some(pos) => match options.elements_mut().get_mut(pos) {
+                                                Some(item) => item.toggle(),
+                                                None => (),
+                                            },
+                                            None => (),
+                                        }
+                                    }
+                                    KeyCode::Down => app.state.item_options().next(),
+                                    KeyCode::Up => app.state.item_options().previous(),
+                                    _ => ()
                                 }
                             }
+                            EditModeType::ItemPath => {
+                                match key.code {
+                                    KeyCode::Char(c) =>{
+                                        app.path.push(c)
+                                    },
+                                    KeyCode::Backspace => {
+                                        app.path.pop();
+                                    }
+                                    _ => (),
+                                }
+                            }
+                            EditModeType::None => {
+                                match key.code {
+                                    KeyCode::Char('e') => {
+                                        app.set_mode(EditModeType::ItemPath);
+                                    }
+            
+                                    KeyCode::Char('m') => app.set_mode(EditModeType::ItemMenu),
+                                    _ => (),
+                                }
+                            }
+                            _ => ()
                         }
-                        KeyCode::Char('e') => {
-                            app.set_mode(EditModeType::ItemPath)
-                        }
-                        KeyCode::Down => app.state.item_options().next(),
-                        KeyCode::Up => app.state.item_options().previous(),
-                        KeyCode::Char('m') => app.set_mode(EditModeType::ItemMenu),
-                        _ => (),
-                    },
-                    _ => (),
+                    }
+                    _ => ()
                 }
             }
         }
@@ -150,6 +171,7 @@ fn render(
         }
     }
 }
+
 
 fn render_block_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
     let area = Layout::default()
@@ -247,16 +269,19 @@ fn render_options_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
 
 fn render_item_menu<B: Backend>(app: &mut App, frame: &mut Frame<B>) {
     let area = Layout::default()
-        .constraints([Constraint::Length(2), Constraint::Length(3), Constraint::Percentage(80)].as_ref())
+        .constraints([Constraint::Length(3), Constraint::Length(3), Constraint::Percentage(70)].as_ref())
         .split(frame.size());
-
     // Create text lines
     let lines: Vec<Spans> = match app.mode {
         EditModeType::None => vec![
             Spans::from(vec![Span::raw("Press "),
             Span::styled("e ", bold()),
             Span::raw("to edit the item name."),]),
-            menu_spans()],
+            menu_spans(),
+            Spans::from(vec![Span::raw("Press "),
+            Span::styled("q ", bold()),
+            Span::raw("to quit the current screen."),]),
+            ],
         EditModeType::ItemMenu => vec![
             move_menu_spans(),
             stop_editing_spans()

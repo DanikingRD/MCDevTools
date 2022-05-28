@@ -32,7 +32,7 @@ impl<'a> App<'a> {
                     
                 ],
             ),
-            menu: MenuType::MainMenu,
+            menu: MenuType::MainMenu
         }
     }
     pub fn navigate(&mut self, menu: MenuType) {
