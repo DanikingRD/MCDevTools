@@ -19,8 +19,8 @@ pub fn create_menu<'a>(title: &'a str, entries: Vec<ListItem<'a>>, active: bool)
 }
 
 pub fn text_field<'a>(
-    current_mode: &EditModeType,
-    active_mode:  EditModeType,
+    current_mode: &EditMode,
+    active_mode: EditMode,
     raw_paragraph: Paragraph<'a>,
     title: &'a str,
 ) -> Paragraph<'a> {
@@ -67,12 +67,13 @@ pub fn stop_editing_spans<'a>() -> Spans<'a> {
     Spans::from(line)
 }
 #[derive(PartialEq, Eq, Debug)]
-pub enum EditModeType {
+pub enum EditMode {
     Namespace,
     MainMenu,
     ItemMenu,
     None,
-    ItemPath,
+    ItemIdentifier,
+    ItemDisplayName,
 }
 
 #[derive(PartialEq, Eq)]
@@ -88,7 +89,7 @@ impl MenuType {
         match *self {
             Self::MainMenu => 0,
             Self::ItemMenu => 1,
-            Self::BlockMenu => 1
+            Self::BlockMenu => 1,
         }
     }
     pub fn can_navigate_back(&self) -> bool {
@@ -103,7 +104,6 @@ impl MenuType {
             // TODO: CHECK OTHER MENUS
             Self::MainMenu
         }
-        
     }
 }
 pub struct StatefulList<T> {
@@ -131,6 +131,15 @@ impl<T> StatefulList<T> {
     pub fn elements(&self) -> &Vec<T> {
         &self.list
     }
+    pub fn update(&mut self, idx: usize, item: T) {
+        match self.list.get(idx) {
+            Some(_) => self.list.insert(idx, item),
+            None => (),
+        }
+    }
+    // pub fn get(&self, idx: usize) -> &mut T {
+    //     self.list.get_mut(idx).unwrap()
+    // }
     pub fn elements_mut(&mut self) -> &mut Vec<T> {
         &mut self.list
     }
@@ -194,7 +203,11 @@ impl<'a> ItemOption<'a> {
         }
     }
     pub fn active(option: &'a str, desc: &'a str) -> Self {
-        Self { option:  option, desc: desc, active: true,  }
+        Self {
+            option: option,
+            desc: desc,
+            active: true,
+        }
     }
     pub fn get_option(&self) -> &'a str {
         self.option

@@ -1,13 +1,12 @@
 use crate::{
-    terminal_state::TerminalState,
-    util::{AvailableOption, EditModeType, ItemOption, MenuType},
+    state::TerminalState,
+    util::{AvailableOption, EditMode, ItemOption, MenuType},
 };
 
 /// This struct holds the current state of the app.
 pub struct App<'a> {
     pub namespace: String,
-    pub path: String,
-    pub mode: EditModeType,
+    pub mode: EditMode,
     pub state: TerminalState<'a>,
     pub menu: MenuType,
 }
@@ -16,8 +15,7 @@ impl<'a> App<'a> {
     pub fn new() -> Self {
         Self {
             namespace: String::from("modid"),
-            path: String::from("Example"),
-            mode: EditModeType::None,
+            mode: EditMode::None,
             state: TerminalState::new(
                 vec![
                     AvailableOption::new("Create Item", "Generates JSON files for an item."),
@@ -25,24 +23,26 @@ impl<'a> App<'a> {
                 ],
                 vec![
                     ItemOption::new(
-                    "Handheld",
-                    "Whether your item inherits handheld properties ('generated' is default).",
+                        "Handheld",
+                        "Whether your item inherits handheld properties ('generated' is default).",
                     ),
-                    ItemOption::active("Generate lang file", "A lang json file will be generated with the translation for your item."),
-                    
+                    ItemOption::active(
+                        "Generate lang file",
+                        "A lang json file will be generated with the translation for your item.",
+                    ),
                 ],
             ),
-            menu: MenuType::MainMenu
+            menu: MenuType::MainMenu,
         }
     }
     pub fn navigate(&mut self, menu: MenuType) {
-        self.mode = EditModeType::None;
+        self.mode = EditMode::None;
         self.menu = menu;
     }
     pub fn current_menu(&self) -> &MenuType {
         &self.menu
     }
-    pub fn set_mode(&mut self, mode: EditModeType) {
+    pub fn set_mode(&mut self, mode: EditMode) {
         self.mode = mode;
     }
     pub fn tick(&self) {}
